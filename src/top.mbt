@@ -43,7 +43,7 @@ let pet: Pet = Pet::new() // 初始化宠物实例
 
 // 游戏的初始化设置
 pub fn start() -> Unit {
-    //@wasm4.set_draw_colors(0x4U, index=1)  // 设置背景颜色
+    //@wasm4.set_draw_colors(0x3U, index=2)  // 设置背景颜色
     //@wasm4.set_draw_colors(0x2U, index=2)  // 设置其他颜色
     @wasm4.set_palette(1, @wasm4.rgb(0xfbf7f3))
     @wasm4.set_palette(2, @wasm4.rgb(0xe5b083))
@@ -88,6 +88,7 @@ pub fn update() -> Unit {
     // 绘制宠物和状态
     draw_pet(pet)
     draw_status(pet)
+    draw_status1(pet)
 }
 
 // 随机事件触发
@@ -157,13 +158,35 @@ pub fn draw_pet(pet: Pet) -> Unit {
         @wasm4.rect(65, 90, 30, 30)  // 绘制成年宠物
     }
 }
+// 绘制属性条（例如饥饿度条）
+pub fn draw_status_bar(x: Int, y: Int, value: Int, max_value: Int) -> Unit {
+    let bar_width = 80
+    let bar_height = 8
+    let filled_width = (value * bar_width) / max_value
+    //绘制属性条背景（黑色）
+    @wasm4.set_draw_colors(0x4U, index=2)  // 背景颜色
+    @wasm4.set_draw_colors(0x4U, index=1)    // 填充颜色
+    @wasm4.rect(x, y, bar_width, bar_height)  // 绘制背景条
+    //绘制属性条（白色）
+    @wasm4.set_draw_colors(0x1U, index=1)    // 填充颜色
+    @wasm4.rect(x, y, filled_width, bar_height)  // 绘制填充条
+}
+
+// 主函数中调用绘制不同属性的状态条
+pub fn draw_status1(pet: Pet) -> Unit {
+    draw_status_bar(60, 20, pet.hunger, 100)       // 饥饿条
+    draw_status_bar(60, 30, pet.happiness, 100)    // 快乐条
+    draw_status_bar(60, 40, pet.cleanliness, 100)  // 清洁条
+    draw_status_bar(60, 50, pet.health, 100)       // 健康条
+}
 
 // 绘制宠物状态
 pub fn draw_status(pet: Pet) -> Unit {
-    @wasm4.set_draw_colors(0x4U, index=1)
+    @wasm4.set_draw_colors(0x1U, index=1)
+    @wasm4.set_draw_colors(0x4U, index=2) 
     @wasm4.text("Age: " + pet.age.to_string(), 10, 10)
     @wasm4.text("Hunger: " + pet.hunger.to_string(), 10, 20)
-    @wasm4.text("Happiness: " + pet.happiness.to_string(), 10, 30)
-    @wasm4.text("Cleanliness: " + pet.cleanliness.to_string(), 10, 40)
+    @wasm4.text("Happy: " + pet.happiness.to_string(), 10, 30)
+    @wasm4.text("Clean: " + pet.cleanliness.to_string(), 10, 40)
     @wasm4.text("Health: " + pet.health.to_string(), 10, 50)
 }
