@@ -1,0 +1,172 @@
+let width = 5 //挡板长宽
+let height = 15
+let ball_size = 5
+let screen_size = 160
+
+// 挡板碰撞检测
+pub fn paddle_collision(
+  y_1 : Int,
+  y_2 : Int,
+  ball_x : Int,
+  ball_y : Int
+) -> Int {
+  if (ball_x < width) && (ball_y < y_2 + height) && (ball_y + ball_size > y_2) { // 宽松的判定：乒乓球碰到左边挡板
+    1
+  } else if (ball_x + ball_size > screen_size - width) && (ball_y < y_1 + height) && (ball_y + ball_size > y_1){ // 乒乓球碰到右边挡板
+    -1
+  } else{
+    0
+  }
+}
+
+pub fn start() -> Unit {
+  @wasm4.set_draw_colors(0x4U, index=1)
+  @wasm4.set_draw_colors(0x0U, index=2)
+}
+
+struct BallStats{
+  mut ball_x : Int
+  mut ball_y : Int
+  mut dir_x : Int
+  mut dir_y : Int 
+  mut y_1 : Int 
+  mut y_2 : Int
+  mut score_1 : Int
+  mut score_2 : Int
+}
+
+//初始化ballstats
+pub fn BallStats::new()->BallStats{
+  {
+    ball_x: screen_size / 2,
+    ball_y: screen_size / 2,
+    dir_x: 1,
+    dir_y: 1,
+    y_1: screen_size / 2,
+    y_2: screen_size / 2,
+    score_1: 0,
+    score_2: 0,
+  }
+}
+
+let bs : BallStats = BallStats::new()
+let rng: @random.Rand = @random.new() //随机数方法
+
+pub fn update() -> Unit {
+  //这里开始搞反了
+  if @wasm4.get_gamepad().button_down && bs.y_1 + height < screen_size{
+    bs.y_1 += 2
+  }else if @wasm4.get_gamepad().button_up && bs.y_1 > 0{
+    bs.y_1 -= 2
+  }
+
+  if @wasm4.get_netplay().active{
+    if @wasm4.get_gamepad(index=2).button_up && bs.y_2 >0{
+      bs.y_2 -= 2
+    }else if @wasm4.get_gamepad(index=2).button_down && bs.y_2 + height < screen_size{
+      bs.y_2 += 2
+    }
+  } else{
+    bs.y_2 = bs.ball_y//没有联机玩家，自动玩（挡板一直跟随球的高度，无敌）改了一下让它变笨点
+    // let random_offset = rng.int() % 7; // 随机数在0到6之间
+    // let new_y_2 = bs.ball_y + random_offset;
+
+    // // 限制bs.y_2在0到screen_size之间
+    // bs.y_2 = if new_y_2 < 0 {
+    //     0
+    // } else if new_y_2 +height > screen_size {
+    //     screen_size
+    // } else {
+    //     new_y_2
+    // };
+
+    // 生成随机数来决定挡板的移动方向和速度变化
+    // let speed_offset = rng.int() % 3;  // 生成0到2的随机速度变化
+    // let direction = rng.int() % 2;     // 生成0或1决定上下方向
+
+    // // 控制挡板的运动
+    // if direction == 0 {
+    //     bs.y_2 -= speed_offset;  // 向上移动
+    // } else {
+    //     bs.y_2 += speed_offset;  // 向下移动
+    // }
+
+    // // 限制bs.y_2的范围在0到screen_size之间，避免超出屏幕边界
+    // if bs.y_2 < 0 {
+    //     bs.y_2 = 0;
+    // } else if bs.y_2 + height > screen_size {
+    //     bs.y_2 = screen_size - height;
+    // }
+    //     // 目标是球的高度
+    // let target_y = bs.ball_y;
+    
+    // // 控制挡板y_2逐步靠近球的位置
+    // let speed = 2 + rng.int() % 3;  // 随机速度在2到4之间
+    // if bs.y_2 < target_y {
+    //     bs.y_2 += speed;  // 挡板向下靠近球
+    // } else if bs.y_2 > target_y {
+    //     bs.y_2 -= speed;  // 挡板向上靠近球
+    // }
+
+    // // 限制bs.y_2的范围在0到screen_size之间，避免超出屏幕边界
+    // if bs.y_2 < 0 {
+    //     bs.y_2 = 0;
+    // } else if bs.y_2 + height > screen_size {
+    //     bs.y_2 = screen_size - height;
+    // }
+  }
+
+  let dir_now = paddle_collision(bs.y_1, bs.y_2, bs.ball_x, bs.ball_y)
+  if dir_now != 0{ //碰撞了挡板
+    let int_rng = rng.int() % 2 //随机决定球的反弹方向：如果 int_rng 是 0，则向上反弹；如果是 1，则向下反弹
+    bs.dir_x = dir_now
+    bs.dir_y = dir_now * (if int_rng != 0 {-1} else {1})
+    @wasm4.tone( //这里对于tone的各个参数不算特别理解
+      (2000, 0),
+      @wasm4.ADSR::new(5),
+      @wasm4.ADSRVolume::new(100),
+      @wasm4.ToneFlag::new()
+    )
+  } 
+  bs.ball_x += bs.dir_x
+  bs.ball_y += bs.dir_y
+  
+// 撞击上下屏幕处理！别忘了
+  if bs.ball_y > screen_size || bs.ball_y < 0 {
+    @wasm4.tone(
+      (2000, 0),
+      @wasm4.ADSR::new(5),
+      @wasm4.ADSRVolume::new(100),
+      @wasm4.ToneFlag::new(),
+    )
+    bs.dir_y = -bs.dir_y
+  }
+
+  if bs.ball_x <= 0 || bs.ball_x > screen_size{ //这个判定？
+    if bs.ball_x <= 0{//left failed
+      bs.score_1 += 1
+    }else if bs.ball_x > screen_size{//right failed
+      bs.score_2 += 1
+    }
+    bs.ball_x = screen_size / 2
+    bs.ball_y = screen_size / 2
+    bs.dir_x = -bs.dir_x
+    @wasm4.tone(
+      (2000, 0),
+      @wasm4.ADSR::new(5),
+      @wasm4.ADSRVolume::new(100),
+      @wasm4.ToneFlag::new()
+    )
+  }
+
+  @wasm4.set_draw_colors(0x4U,index=1)
+  @wasm4.set_draw_colors(0x0U,index=2)
+  @wasm4.text(bs.score_2.to_string(), 70, 0)
+  @wasm4.text(bs.score_1.to_string(), 85, 0)
+  @wasm4.rect(screen_size/2, 0 , 2, screen_size)
+  @wasm4.set_draw_colors(0x2U,index=1)
+  @wasm4.set_draw_colors(0x3U, index=2)
+  @wasm4.oval(bs.ball_x, bs.ball_y, ball_size, ball_size)
+  @wasm4.rect(0, bs.y_2, width, height)
+  @wasm4.rect(screen_size - width, bs.y_1, width, height)
+}

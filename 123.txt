@@ -1,0 +1,12 @@
+通过以下命令执行：
+moon build --target wasm
+npx wasm4 run target/wasm/release/build/demo.wasm
+需要调试并查看带有函数名的堆栈跟踪信息，也可以使用调试模式：
+moon build --target wasm -g
+npx wasm4 run target/wasm/debug/build/demo.wasm
+
+moonbitlang/wasm4 提供了一个高级抽象，使你可以轻松编写代码。
+为了避免混淆，绘图颜色和调色板的索引从 1 开始。你还可以设置 160 x 160 像素中的每一个像素。
+有关这一步的设置请参阅官方 Wasm4 document 和 MoonBit 的 SDK API。
+
+start 函数将在初始化期间调用一次，而 update 函数将以 60Hz 的频率被调用
