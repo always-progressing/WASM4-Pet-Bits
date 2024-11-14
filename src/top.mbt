@@ -1,4 +1,12 @@
+// enum GameScene{
+//     MainPage;
+//     FoodGame;
+//     BathGame;
+//     PlayGame;
+// }
+
 struct GameState {
+    //current_scene: GameScene //添加场景属性
     mut frame_counter: Int
     update_interval: Int
     mut event_message: String   // 用于显示的随机事件信息
@@ -7,12 +15,18 @@ struct GameState {
     food_area: (Int, Int)  
     bath_area: (Int, Int)  
     toy_area: (Int, Int)    
-    hospital_area: (Int, Int)        
+    hospital_area: (Int, Int)
+    mut food_game: Option[FoodGame]  // 用于保存正在运行的 FoodGame
+    mut play_game: Option[PlayGame]         
+    mut bath_game: Option[BathGame]
+    mut last_click_frame: Int // 新增：记录上次点击的帧数
+    click_cooldown: Int // 新增：点击冷却时间
 }
 
 // 初始化游戏状态
 pub fn GameState::new() -> GameState {
     return {
+        //current_scene: GameScene::MainPage,
         frame_counter: 0,       // 帧计数器初始值
         update_interval: 60,    // 每60帧更新一次
         event_message: "",      // 初始化时没有事件信息
@@ -21,7 +35,12 @@ pub fn GameState::new() -> GameState {
         food_area: (10, 100),
         bath_area: (120, 100),
         toy_area: (20, 120),
-        hospital_area: (100, 120),
+        hospital_area: (98, 5),
+        food_game: None,  // 初始状态下没有激活的FoodGame
+        play_game: None,
+        bath_game: None,
+        last_click_frame: -60, // 初始化点击时间，确保第一次点击不会受限
+        click_cooldown: 10, // 冷却时间为10帧
     }
 }
 
@@ -40,14 +59,15 @@ struct Pet {
     mut coins: Int
 }
 
+
 //绘制功能区
 pub fn draw_areas() -> Unit {
-    @wasm4.set_draw_colors(0x1U, index=1)
+    @wasm4.set_draw_colors(0x4U, index=1)
     @wasm4.set_draw_colors(0x3U, index=2) 
-    @wasm4.text("Food", 10, 100)    // 绘制饭桌图标
+    @wasm4.text("Food", 5, 100)    // 绘制饭桌图标
     @wasm4.text("Bath", 120, 100)   // 绘制浴缸图标
-    @wasm4.text("Toy", 20, 120)    // 绘制玩具图标
-    @wasm4.text("Hospital", 100, 120)  // 绘制医院图标
+    @wasm4.text("Toy", 5, 120)    // 绘制玩具图标
+    @wasm4.text("Hospial", 98, 5)  // 绘制医院图标
 }
 
 
@@ -88,14 +108,20 @@ pub fn update() -> Unit {
     if game_state.frame_counter % game_state.update_interval == 0 {
         // 更新宠物状态，随着时间推移减少状态值
         pet.age += 1
-        pet.hunger -= 1
-        pet.happiness -= 1
-        pet.cleanliness -= 1
+        if(pet.hunger >= 0){
+            pet.hunger -= 1
+        }
+        if(pet.happiness >= 0){
+            pet.happiness -= 1
+        }
+        if(pet.cleanliness >= 0){
+            pet.cleanliness -= 1
+        }
 
         // 处理宠物的成长阶段
-        if pet.age > 100 && pet.stage == 1 {
+        if pet.age > 100 && pet.stage == 1 && pet.hunger > 0 && pet.cleanliness > 0 && pet.happiness >0{
             pet.stage = 2  // 从婴儿阶段成长到幼年
-        } else if pet.age > 200 && pet.stage == 2 {
+        } else if pet.age > 200 && pet.stage == 2 && pet.hunger > 0 && pet.cleanliness > 0 && pet.happiness >0{
             pet.stage = 3  // 从幼年成长到成年
         }
 
@@ -113,6 +139,27 @@ pub fn update() -> Unit {
     if game_state.event_timer > 0 {
         game_state.event_timer -= 1  // 每帧减少计时器
         @wasm4.text(game_state.event_message, 30, 150)  // 显示事件信息
+    }
+
+    match game_state.food_game {
+        Some(food_game) => {
+            play_food_game(pet, game_state)
+        }
+        None => ()
+    }
+
+    match game_state.play_game {
+        Some(play_game) => {
+            play_pass_ball_game(pet, game_state)
+        }
+        None => ()
+    }
+
+    match game_state.bath_game {
+        Some(bath_game) => {
+            play_bath_game(pet, game_state)
+        }
+        None => ()
     }
 
     // 绘制宠物和状态
@@ -139,16 +186,19 @@ pub fn update() -> Unit {
 let rng: @random.Rand = @random.new()
 pub fn trigger_random_event(pet: Pet) -> Unit {
     //let rng: @random.Rand = @random.new()
-    let event = rng.int() % 3
+    let event = rng.int() % 4
     if event == 0 {
         pet.health -= 10
         game_state.event_message = "Pet is sick!"
     } else if event == 1 {
         pet.happiness += 10
         game_state.event_message = "Pet is happy!"
-    } else {
+    } else if event == 2{
         pet.cleanliness -= 10
         game_state.event_message = "Pet is dirty!"
+    } else{
+        pet.coins += 500
+        game_state.event_message = "Pet finds coins!"
     }
 
     // 设置事件文字显示时长为180帧（大约3秒）
@@ -245,13 +295,13 @@ pub fn draw_status(pet: Pet) -> Unit {
 
 pub fn check_collision(pet: Pet, game_state: GameState) -> Unit {
     if is_colliding(pet, game_state.food_area) {
-        start_food_game(pet)  // 进入吃饭游戏
+        start_food_game(game_state, pet)  // 进入吃饭游戏
     }
     if is_colliding(pet, game_state.bath_area) {
-        start_bath_game(pet)  // 进入洗澡游戏
+        start_bath_game(game_state, pet)  // 进入洗澡游戏
     }
     if is_colliding(pet, game_state.toy_area) {
-        start_play_game(pet)  // 进入玩耍游戏
+        start_play_game(game_state, pet)  // 进入玩耍游戏
     }
     if is_colliding(pet, game_state.hospital_area) {
         buy_medicine(pet)  // 进入医院购买药品
@@ -262,3 +312,4 @@ fn is_colliding(pet: Pet, area: (Int, Int)) -> Bool {
     let (area_x, area_y) = area
     (pet.x - area_x).abs() < 10 && (pet.y - area_y).abs() < 10  // 碰撞判定逻辑
 }
+
