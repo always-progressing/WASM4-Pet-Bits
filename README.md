@@ -1,4 +1,8 @@
 # WASM4-Pet-Bits
+
+# 立刻开始
+下载main分支上的PetBits.html，在本地打开即可开玩！
+
 # PetBit - 养宠物小游戏
 （代码位于master分支）
 
